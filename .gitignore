@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+
+# Env files (do not commit secrets)
+.env
+backend/.env
+frontend/.env
+frontend/.env.*
+
+# OS / Editor
+.DS_Store
+Thumbs.db
