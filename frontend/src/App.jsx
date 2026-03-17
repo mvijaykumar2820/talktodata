@@ -4,7 +4,11 @@ import DataGrid from './components/DataGrid';
 import Setup from './components/Setup';
 import { fetchKPIs, submitQuery, uploadCSV, fetchData } from './utils/api';
 import { Send, Upload, Trash2, KeyRound, Plus, MessageSquare, History, LogOut, User, UploadCloud, CheckCircle, Sparkles, BarChart2, Table } from 'lucide-react';
+import { Pie } from 'react-chartjs-2';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { auth, googleProvider } from './firebase.js';
+
+ChartJS.register(ArcElement, Tooltip, Legend);
 import {
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
@@ -58,6 +62,47 @@ function generateExampleQueries(session) {
 
 const STORAGE_KEY = 'talktodata_bi_sessions';
 
+const TECH_STACK_DATA = {
+    labels: ['React.js (UI)', 'FastAPI (Backend)', 'Gemini AI', 'Pandas (Data)', 'Chart.js (Vis)'],
+    datasets: [
+        {
+            data: [35, 25, 20, 10, 10],
+            backgroundColor: [
+                'rgba(59, 130, 246, 0.8)', // blue
+                'rgba(16, 185, 129, 0.8)', // teal
+                'rgba(236, 72, 153, 0.8)', // pink
+                'rgba(245, 158, 11, 0.8)', // gold
+                'rgba(168, 85, 247, 0.8)', // purple
+            ],
+            borderColor: 'rgba(9, 9, 11, 1)',
+            borderWidth: 2,
+            hoverOffset: 10
+        }
+    ]
+};
+
+const TECH_CHART_OPTIONS = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: {
+            position: 'right',
+            labels: { color: '#a1a1aa', font: { size: 13, family: 'Inter' }, padding: 20 }
+        },
+        tooltip: {
+            backgroundColor: 'rgba(24, 24, 27, 0.9)',
+            titleColor: '#ec4899',
+            bodyColor: '#fafafa',
+            borderColor: 'rgba(236, 72, 153, 0.3)',
+            borderWidth: 1,
+            padding: 12,
+            callbacks: {
+                label: (context) => ` ${context.label}: ${context.raw}%`
+            }
+        }
+    }
+};
+
 export default function App() {
     const [apiKey, setApiKey] = useState(() => sessionStorage.getItem('geminiApiKey') || 'backend-managed-key');
     const [kpis, setKpis] = useState(null);
@@ -80,7 +125,7 @@ export default function App() {
     const [inputVal, setInputVal] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [viewMode, setViewMode] = useState('insights'); // 'insights' or 'data'
+    const [viewMode, setViewMode] = useState('chat'); // 'chat', 'insights', or 'data'
     const [rawData, setRawData] = useState([]);
     const fileInputRef = useRef(null);
     const scrollRef = useRef(null);
@@ -145,7 +190,7 @@ export default function App() {
         setCurrentSessionId(newSession.id);
         setUploadedDataset(true);
         setShowWelcome(false);
-        setViewMode('insights');
+        setViewMode('chat');
     };
 
     const deleteSession = (id, e) => {
@@ -259,38 +304,45 @@ export default function App() {
 
     if (!user && showIntro) {
         return (
-            <div className="login-screen">
-                <div className="login-card" style={{ maxWidth: 800, padding: 60, textAlign: 'center' }}>
-                    <div style={{ marginBottom: 40 }}>
-                        <Sparkles size={64} color="var(--accent-pink)" style={{ margin: '0 auto 24px' }}/>
-                        <h1 style={{ fontSize: 56, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 16, background: 'linear-gradient(135deg, #fff, #a1a1aa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>TalktoData</h1>
-                        <p style={{ fontSize: 20, color: 'var(--text-secondary)', maxWidth: 500, margin: '0 auto', lineHeight: 1.6 }}>Talk to your data naturally, uncover deep insights instantly, and make better decisions.</p>
+            <div className="login-screen split-layout">
+                <div className="split-left">
+                    <div className="split-left-content">
+                        <Sparkles size={48} color="var(--accent-pink)" style={{ marginBottom: 24 }}/>
+                        <h1 style={{ fontSize: 48, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 16, color: '#fff' }}>Powering the Future of Data</h1>
+                        <p style={{ fontSize: 18, color: 'var(--text-secondary)', marginBottom: 40, lineHeight: 1.6 }}>TalktoData is built on a cutting-edge modern tech stack, combining powerful AI with high-speed analytical processing.</p>
+                        
+                        <div style={{ height: 320, width: '100%', maxWidth: 500, margin: '0 auto' }}>
+                            <Pie data={TECH_STACK_DATA} options={TECH_CHART_OPTIONS} />
+                        </div>
                     </div>
-                    
-                    <button 
-                        onClick={() => setShowIntro(false)}
-                        style={{ 
-                            background: 'var(--accent-pink)', 
-                            color: '#fff', 
-                            border: 'none', 
-                            padding: '16px 48px', 
-                            fontSize: 18, 
-                            fontWeight: 600, 
-                            borderRadius: 100, 
-                            cursor: 'pointer',
-                            boxShadow: '0 4px 20px rgba(236, 72, 153, 0.3)',
-                            transition: 'transform 0.2s, box-shadow 0.2s'
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(236, 72, 153, 0.4)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(236, 72, 153, 0.3)'; }}
-                    >
-                        Get Started
-                    </button>
-                    
-                    <div style={{ marginTop: 60, display: 'flex', gap: 32, justifyContent: 'center', color: 'var(--text-muted)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><BarChart2 size={20}/> <span>Instant KPIs</span></div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={20}/> <span>Natural Language</span></div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Table size={20}/> <span>Any CSV</span></div>
+                </div>
+                <div className="split-right">
+                    <div className="split-right-content">
+                        <div style={{ marginBottom: 40, textAlign: 'center' }}>
+                            <h2 style={{ fontSize: 36, fontWeight: 800, marginBottom: 16, background: 'linear-gradient(135deg, #fff, #a1a1aa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>TalktoData</h2>
+                            <p style={{ fontSize: 16, color: 'var(--text-muted)' }}>Sign in to start talking to your data.</p>
+                        </div>
+                        
+                        <button 
+                            onClick={() => setShowIntro(false)}
+                            style={{ 
+                                background: 'var(--accent-pink)', 
+                                color: '#fff', 
+                                border: 'none', 
+                                padding: '16px 48px', 
+                                fontSize: 18, 
+                                fontWeight: 600, 
+                                borderRadius: 100, 
+                                cursor: 'pointer',
+                                width: '100%',
+                                boxShadow: '0 4px 20px rgba(236, 72, 153, 0.3)',
+                                transition: 'transform 0.2s, box-shadow 0.2s'
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(236, 72, 153, 0.4)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(236, 72, 153, 0.3)'; }}
+                        >
+                            Get Started
+                        </button>
                     </div>
                 </div>
             </div>
@@ -299,34 +351,46 @@ export default function App() {
 
     if (!user && !showIntro) {
         return (
-            <div className="login-screen">
-                <div className="login-card">
-                    <div className="login-logo">
-                        <Sparkles size={40} color="var(--accent-pink)" />
-                        <h1 className="login-title">TalktoData</h1>
-                        <p className="login-subtitle">The future of data analysis</p>
+            <div className="login-screen split-layout">
+                <div className="split-left">
+                    <div className="split-left-content">
+                        <Sparkles size={48} color="var(--accent-pink)" style={{ marginBottom: 24 }}/>
+                        <h1 style={{ fontSize: 48, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 16, color: '#fff' }}>Powering the Future of Data</h1>
+                        <p style={{ fontSize: 18, color: 'var(--text-secondary)', marginBottom: 40, lineHeight: 1.6 }}>TalktoData is built on a cutting-edge modern tech stack, combining powerful AI with high-speed analytical processing.</p>
+                        
+                        <div style={{ height: 320, width: '100%', maxWidth: 500, margin: '0 auto' }}>
+                            <Pie data={TECH_STACK_DATA} options={TECH_CHART_OPTIONS} />
+                        </div>
                     </div>
-                    <div className="auth-tabs">
-                        <button className={`auth-tab ${authTab === 'signin' ? 'active' : ''}`} onClick={() => setAuthTab('signin')}>Sign In</button>
-                        <button className={`auth-tab ${authTab === 'signup' ? 'active' : ''}`} onClick={() => setAuthTab('signup')}>Sign Up</button>
+                </div>
+                <div className="split-right">
+                    <div className="login-card full-width">
+                        <div className="login-logo">
+                            <Sparkles size={40} color="var(--accent-pink)" />
+                            <h2 className="login-title" style={{ fontSize: 28 }}>Welcome Back</h2>
+                        </div>
+                        <div className="auth-tabs">
+                            <button className={`auth-tab ${authTab === 'signin' ? 'active' : ''}`} onClick={() => setAuthTab('signin')}>Sign In</button>
+                            <button className={`auth-tab ${authTab === 'signup' ? 'active' : ''}`} onClick={() => setAuthTab('signup')}>Sign Up</button>
+                        </div>
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            const email = e.target.email.value;
+                            const pass = e.target.password.value;
+                            if (authTab === 'signin') {
+                                signInWithEmailAndPassword(auth, email, pass).catch(err => setAuthError(err.message));
+                            } else {
+                                createUserWithEmailAndPassword(auth, email, pass).catch(err => setAuthError(err.message));
+                            }
+                        }}>
+                            <input name="email" type="email" placeholder="Email" className="auth-input" required />
+                            <input name="password" type="password" placeholder="Password" className="auth-input" required />
+                            <button type="submit" className="auth-submit-btn">{authTab === 'signin' ? 'Sign In' : 'Create Account'}</button>
+                        </form>
+                        <div className="auth-divider">or</div>
+                        <button className="google-btn" onClick={() => signInWithPopup(auth, googleProvider)}><User size={18} /> Continue with Google</button>
+                        {authError && <div className="auth-error">{authError}</div>}
                     </div>
-                    <form onSubmit={(e) => {
-                        e.preventDefault();
-                        const email = e.target.email.value;
-                        const pass = e.target.password.value;
-                        if (authTab === 'signin') {
-                            signInWithEmailAndPassword(auth, email, pass).catch(err => setAuthError(err.message));
-                        } else {
-                            createUserWithEmailAndPassword(auth, email, pass).catch(err => setAuthError(err.message));
-                        }
-                    }}>
-                        <input name="email" type="email" placeholder="Email" className="auth-input" required />
-                        <input name="password" type="password" placeholder="Password" className="auth-input" required />
-                        <button type="submit" className="auth-submit-btn">{authTab === 'signin' ? 'Sign In' : 'Create Account'}</button>
-                    </form>
-                    <div className="auth-divider">or</div>
-                    <button className="google-btn" onClick={() => signInWithPopup(auth, googleProvider)}><User size={18} /> Continue with Google</button>
-                    {authError && <div className="auth-error">{authError}</div>}
                 </div>
             </div>
         );
@@ -390,6 +454,9 @@ export default function App() {
                         <Plus size={16} /> New Chat
                     </button>
                     <div className="sidebar-nav">
+                        <button className={`nav-item ${viewMode === 'chat' ? 'active' : ''}`} onClick={() => setViewMode('chat')}>
+                            <MessageSquare size={16} /> Chat
+                        </button>
                         <button className={`nav-item ${viewMode === 'insights' ? 'active' : ''}`} onClick={() => setViewMode('insights')}>
                             <BarChart2 size={16} /> Insights
                         </button>
@@ -401,7 +468,7 @@ export default function App() {
                 <div className="history-section">
                     <div className="history-label"><History size={12} /> RECENT ANALYTICS</div>
                     {sessions.map(s => (
-                        <div key={s.id} className={`history-item ${currentSessionId === s.id ? 'active' : ''}`} onClick={() => { setCurrentSessionId(s.id); setShowWelcome(false); setViewMode('insights'); }}>
+                        <div key={s.id} className={`history-item ${currentSessionId === s.id ? 'active' : ''}`} onClick={() => { setCurrentSessionId(s.id); setShowWelcome(false); setViewMode('chat'); }}>
                             <MessageSquare size={14} />
                             <span className="history-title">{s.title}</span>
                             <button className="del-session" onClick={(e) => deleteSession(s.id, e)}><Trash2 size={12} /></button>
@@ -458,33 +525,10 @@ export default function App() {
                     )}
                 </header>
 
-                {/* KPI Bar */}
-                {activeSession && kpis && viewMode === 'insights' && kpis.dynamicKpis && kpis.dynamicKpis.length > 0 && (
-                    <div className="kpi-bar">
-                        <div className="kpi-grid">
-                            {/* Dataset overview card */}
-                            <div className="kpi-card" style={{ borderTopColor: 'var(--text-muted)' }}>
-                                <div className="kpi-label">DATASET</div>
-                                <div className="kpi-value" style={{ color: 'var(--text-primary)', fontSize: 18 }}>
-                                    {kpis.totalRows?.toLocaleString()} × {kpis.totalColumns}
-                                </div>
-                                <div className="kpi-sub">Rows × Columns</div>
-                            </div>
-                            {/* Dynamic KPI cards from backend */}
-                            {kpis.dynamicKpis.map((kpi, idx) => (
-                                <div key={idx} className="kpi-card" style={{ borderTopColor: kpi.color }}>
-                                    <div className="kpi-label">{kpi.label}</div>
-                                    <div className="kpi-value" style={{ color: kpi.color }}>{kpi.value}</div>
-                                    <div className="kpi-sub">{kpi.sub}</div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
+                {/* Main Content Area */}
                 <div className="scroll-area" ref={scrollRef}>
                     <div className="main-content">
-                        {viewMode === 'insights' ? (
+                        {viewMode === 'chat' && (
                             <div className="messages-list">
                                 {(!activeSession || activeSession.messages.length === 0) && (
                                     <div className="empty-state">
@@ -523,13 +567,39 @@ export default function App() {
                                 )}
                                 {error && <div className="error-box">{error}</div>}
                             </div>
-                        ) : (
+                        )}
+
+                        {viewMode === 'insights' && activeSession && kpis && (
+                            <div className="insights-dashboard" style={{ padding: '24px' }}>
+                                <h2 style={{ fontSize: 24, fontWeight: 600, marginBottom: 24, color: 'var(--text-primary)' }}>High-Level Metrics</h2>
+                                <div className="kpi-grid">
+                                    {/* Dataset overview card */}
+                                    <div className="kpi-card" style={{ borderTopColor: 'var(--text-muted)' }}>
+                                        <div className="kpi-label">DATASET</div>
+                                        <div className="kpi-value" style={{ color: 'var(--text-primary)', fontSize: 28 }}>
+                                            {kpis.totalRows?.toLocaleString()} × {kpis.totalColumns}
+                                        </div>
+                                        <div className="kpi-sub">Rows × Columns</div>
+                                    </div>
+                                    {/* Dynamic KPI cards from backend */}
+                                    {kpis.dynamicKpis?.map((kpi, idx) => (
+                                        <div key={idx} className="kpi-card" style={{ borderTopColor: kpi.color }}>
+                                            <div className="kpi-label">{kpi.label}</div>
+                                            <div className="kpi-value" style={{ color: kpi.color, fontSize: 28 }}>{kpi.value}</div>
+                                            <div className="kpi-sub">{kpi.sub}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {viewMode === 'data' && (
                             <DataGrid data={rawData} />
                         )}
                     </div>
                 </div>
 
-                {viewMode === 'insights' && (
+                {viewMode === 'chat' && (
                     <div className="chat-section">
                         <div className="chat-box">
                             <form onSubmit={handleSubmit} className="chat-input-row">

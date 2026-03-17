@@ -15,7 +15,8 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","),
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -306,6 +307,15 @@ class QueryRequest(BaseModel):
 class KPIRequest(BaseModel):
     dataset: str = "nykaa"
 
+class InsightRequest(BaseModel):
+    dataset: str = "nykaa"
+    api_key: str
+    data_point: str
+    metric: str
+    value: float
+    context: str
+    is_detailed: bool = False
+
 class UploadResponse(BaseModel):
     key: str
     columns: list
@@ -344,7 +354,7 @@ JSON schema for data queries:
   "filters": [{"column": "...", "op": "eq|contains|gt|lt", "value": "..."}],
   "sortBy": "value_desc|value_asc|name|null",
   "limit": "number or null",
-  "insight": "A detailed 2-3 sentence business insight based on the data requested. Be specific about trends or comparisons.",
+  "insight": "A comprehensive, highly detailed 5-8 sentence paragraph of business analysis based on the data requested. Deeply analyze trends, implications, and what the data tells us from a strategic standpoint.",
   "xAxisLabel": "label string",
   "yAxisLabel": "label string"
 }
@@ -472,7 +482,7 @@ def call_gemini(question, history, api_key, dataset_name="Nykaa Campaigns", cust
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key_to_use}"
     body = {
         "contents": [{"parts": [{"text": full_prompt}]}],
-        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1000}
+        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1500}
     }
 
     response = requests.post(url, json=body, timeout=30)
@@ -615,6 +625,23 @@ def calculate_kpis(df):
     if "Conversions" in cols:
         kpis["totalConversions"] = int(df["Conversions"].sum())
 
+    if "Target_Audience" in cols and "Revenue" in cols:
+        top_audience = (df.groupby("Target_Audience")["Revenue"].sum().idxmax())
+        kpis["topAudience"] = str(top_audience)
+
+    # Calculate Year-over-Year Revenue if Date exists
+    if "Date" in cols and "Revenue" in cols:
+        # Create a temp datetime col to extract year safely
+        temp_dates = pd.to_datetime(df["Date"], format="%d-%m-%Y", errors='coerce')
+        df_years = df.copy()
+        df_years["_year"] = temp_dates.dt.year
+        
+        rev_2024 = df_years[df_years["_year"] == 2024]["Revenue"].sum()
+        rev_2025 = df_years[df_years["_year"] == 2025]["Revenue"].sum()
+        
+        kpis["rev2024"] = round(float(rev_2024), 2)
+        kpis["rev2025"] = round(float(rev_2025), 2)
+
     # Build dynamic KPI cards for the frontend
     dynamic = []
 
@@ -644,10 +671,34 @@ def calculate_kpis(df):
 
     if "topChannel" in kpis:
         dynamic.append({
-            "label": "TOP CHANNEL",
+            "label": "TOP PLATFORM",
             "value": kpis["topChannel"],
-            "sub": "Highest revenue primary channel",
+            "sub": "Highest revenue platform",
             "color": "#ec4899",
+        })
+
+    if "topAudience" in kpis:
+        dynamic.append({
+            "label": "TOP AUDIENCE",
+            "value": kpis["topAudience"],
+            "sub": "Most profitable segment",
+            "color": "#eab308",
+        })
+
+    if "rev2024" in kpis and kpis["rev2024"] > 0:
+        dynamic.append({
+            "label": "2024 REVENUE",
+            "value": f"{int(kpis['rev2024']):,}",
+            "sub": "Total generated in 2024",
+            "color": "#6366f1",
+        })
+
+    if "rev2025" in kpis and kpis["rev2025"] > 0:
+        dynamic.append({
+            "label": "2025 REVENUE",
+            "value": f"{int(kpis['rev2025']):,}",
+            "sub": "Total generated in 2025",
+            "color": "#14b8a6",
         })
 
     if "avgEngagement" in kpis:
@@ -708,6 +759,66 @@ def query_endpoint(req: QueryRequest):
         "chartData": chart_data,
         "rowsAnalyzed": len(df_use)
     }
+
+@app.post("/api/insight")
+def insight_endpoint(req: InsightRequest):
+    df_use = global_df if req.dataset == "nykaa" else uploaded_datasets.get(req.dataset)
+    dataset_name = "Nykaa Campaigns" if req.dataset == "nykaa" else "Uploaded Dataset"
+    
+    insight_length = "brief 1-2 sentence" if not req.is_detailed else "comprehensive, highly detailed 4-6 sentence paragraph"
+    
+    prompt = f"""
+    Dataset context: {dataset_name}
+    The user is looking at a chart about: {req.context}
+    They {'clicked' if req.is_detailed else 'hovered'} over a specific data point:
+    Name/Category: {req.data_point}
+    Metric: {req.metric}
+    Value: {req.value}
+    
+    Provide a {insight_length} AI insight explaining why this specific data point might have this value.
+    {"If detailed, deeply analyze potential causes, underlying factors, and strategic business implications, giving a much deeper dive into what this number means." if req.is_detailed else "Keep it concise, punchy, and helpful."}
+    Do not mention that you are an AI. Do not use JSON. Just write the text.
+    """
+    
+    try:
+        # Reuse call_gemini logic but bypass the JSON parsing and system prompt
+        # A simpler direct call for plain text:
+        user_key = req.api_key if req.api_key and req.api_key != "backend-managed-key" else None
+        
+        openrouter_key = None
+        if user_key and user_key.startswith("sk-or-"):
+            openrouter_key = user_key
+        elif not user_key:
+            server_gemini_key = os.environ.get("GEMINI_API_KEY")
+            if not server_gemini_key and os.environ.get("OPENROUTER_API_KEY"):
+                openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+
+        if openrouter_key:
+            url = "https://openrouter.ai/api/v1/chat/completions"
+            headers = {"Authorization": f"Bearer {openrouter_key}"}
+            body = {
+                "model": "openai/gpt-4o-mini",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.3,
+            }
+            res = requests.post(url, json=body, headers=headers, timeout=15).json()
+            text = res["choices"][0]["message"]["content"].strip()
+            return {"insight": text}
+            
+        api_key_to_use = user_key or os.environ.get("GEMINI_API_KEY")
+        if not api_key_to_use: return {"insight": "Missing API key."}
+        
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key_to_use}"
+        body = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.5, "maxOutputTokens": 800}
+        }
+        res = requests.post(url, json=body, timeout=15).json()
+        text = res["candidates"][0]["content"]["parts"][0]["text"].strip()
+        return {"insight": text}
+        
+    except Exception as e:
+        return {"insight": "Could not generate insight for this point."}
 
 import time
 @app.post("/api/upload")

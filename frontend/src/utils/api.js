@@ -1,9 +1,11 @@
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 /**
  * Fetches KPIs from the backend
  * @returns {Promise<Object>} KPI data object
  */
 export async function fetchKPIs(dataset = 'nykaa') {
-    const res = await fetch(`/api/kpis?dataset=${dataset}`)
+    const res = await fetch(`${API_BASE}/api/kpis?dataset=${dataset}`)
     if (!res.ok) throw new Error('Failed to load KPIs')
     return res.json()
 }
@@ -14,7 +16,7 @@ export async function fetchKPIs(dataset = 'nykaa') {
  * @returns {Promise<Array>} Data rows
  */
 export async function fetchData(datasetKey = 'nykaa') {
-    const res = await fetch(`/api/data?dataset=${datasetKey}`)
+    const res = await fetch(`${API_BASE}/api/data?dataset=${datasetKey}`)
     if (!res.ok) throw new Error('Failed to fetch data')
     return res.json()
 }
@@ -28,7 +30,7 @@ export async function fetchData(datasetKey = 'nykaa') {
  * @returns {Promise<Object>} The API response and chart data
  */
 export async function submitQuery(question, history, apiKey, dataset = 'nykaa') {
-    const res = await fetch('/api/query', {
+    const res = await fetch(`${API_BASE}/api/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, history, api_key: apiKey, dataset })
@@ -53,7 +55,7 @@ export async function submitQuery(question, history, apiKey, dataset = 'nykaa') 
 export async function uploadCSV(file) {
     const form = new FormData()
     form.append('file', file)
-    const res = await fetch('/api/upload', { method: 'POST', body: form })
+    const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: form })
     if (!res.ok) throw new Error('Upload failed')
     return res.json()
 }
